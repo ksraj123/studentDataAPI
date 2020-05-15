@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -37,7 +38,25 @@ var studentColl *mongo.Collection
 // Get all Students
 func getStudents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(students)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	var results []*Student
+	cur, err := studentColl.Find(ctx, bson.D{{}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	for cur.Next(ctx) {
+		var elem Student
+		err := cur.Decode(&elem)
+		if err != nil {
+			log.Fatal(err)
+		}
+		results = append(results, &elem)
+	}
+	if err := cur.Err(); err != nil {
+		log.Fatal(err)
+	}
+	cur.Close(ctx)
+	json.NewEncoder(w).Encode(results)
 }
 
 // Get Single Student
@@ -57,7 +76,7 @@ func getStudent(w http.ResponseWriter, r *http.Request) {
 func createStudent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var student Student
-	_ = json.NewDecoder(r.Body).Decode(&student)
+	json.NewDecoder(r.Body).Decode(&student)
 	student.Roll = strconv.Itoa(rand.Intn(1000000))
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
