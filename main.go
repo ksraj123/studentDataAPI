@@ -63,13 +63,14 @@ func getStudents(w http.ResponseWriter, r *http.Request) {
 func getStudent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Get params
-	for _, item := range students {
-		if item.Roll == params["roll"] {
-			json.NewEncoder(w).Encode(item)
-			return
-		}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	var result Student
+	err := studentColl.FindOne(ctx, bson.M{"roll": params["roll"]}).Decode(&result)
+	if err != nil {
+		log.Fatal(err)
 	}
-	json.NewEncoder(w).Encode(&Student{}) // return empty student when not found
+	json.NewEncoder(w).Encode(result)
+	// Handle error when wrong roll number provided
 }
 
 // create a new Student
@@ -110,14 +111,12 @@ func updateStudent(w http.ResponseWriter, r *http.Request) {
 func deleteStudent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Get params
-	for index, item := range students {
-		if item.Roll == params["roll"] {
-			students = append(students[:index], students[index+1:]...)
-			log.Println(item)
-			break
-		}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	deleteResult, err := studentColl.DeleteMany(ctx, bson.M{"roll": params["roll"]})
+	if err != nil {
+		log.Fatal(err)
 	}
-	json.NewEncoder(w).Encode(students)
+	json.NewEncoder(w).Encode(deleteResult)
 }
 
 func main() {
