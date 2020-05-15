@@ -1,23 +1,26 @@
 package main
 
 import (
-	//core package
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"       // core package - logs erros etc
-	"math/rand" // corepackage
-	"net/http"  // core package - used to work with http
+	"log"
+	"math/rand"
+	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Student Struct (Model)
 type Student struct {
-	Roll   string  `json:"roll"`
-	Name   string  `json:"name"`
-	Branch string  `json:"branch"`
-	Parent *Parent `json:"parent"`
+	Roll   string  `json:"roll" bson:"roll,omitempty"`
+	Name   string  `json:"name" bson:"name,omitempty"`
+	Branch string  `json:"branch" bson:"branch,omitempty"`
+	Parent *Parent `json:"parent" bson:"parent,omitempty"`
 }
 
 // Parent Struct
@@ -28,6 +31,8 @@ type Parent struct {
 
 // Local datastore save all students inside a slice named students which contain vlues of type Student
 var students []Student
+
+var studentColl *mongo.Collection
 
 // Get all Students
 func getStudents(w http.ResponseWriter, r *http.Request) {
@@ -54,8 +59,15 @@ func createStudent(w http.ResponseWriter, r *http.Request) {
 	var student Student
 	_ = json.NewDecoder(r.Body).Decode(&student)
 	student.Roll = strconv.Itoa(rand.Intn(1000000))
-	students = append(students, student)
-	json.NewEncoder(w).Encode(student)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+
+	insertResult, err := studentColl.InsertOne(ctx, student)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// students = append(students, student)
+	json.NewEncoder(w).Encode(insertResult)
 }
 
 // Udate a Student
@@ -68,7 +80,7 @@ func updateStudent(w http.ResponseWriter, r *http.Request) {
 		if item.Roll == params["roll"] {
 			student.Roll = params["roll"] // Roll is internal and cannot be changed
 			students = append(append(students[:index], student), students[index+1:]...)
-			fmt.Println(item)
+			log.Println(item)
 			break
 		}
 	}
@@ -82,7 +94,7 @@ func deleteStudent(w http.ResponseWriter, r *http.Request) {
 	for index, item := range students {
 		if item.Roll == params["roll"] {
 			students = append(students[:index], students[index+1:]...)
-			fmt.Println(item)
+			log.Println(item)
 			break
 		}
 	}
@@ -90,6 +102,26 @@ func deleteStudent(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Connecting to database
+
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Connected to MongoDB!")
+	studentColl = client.Database("test").Collection("students")
+	// fmt.Printf("type of ctx variable = %T\n", ctx)
+
+	// insertResult, err := studentColl.InsertOne(ctx, Student{Roll: "1", Branch: "123456", Name: "Student 1",
+	// 	Parent: &Parent{Firstname: "saurabh", Lastname: "raj"}})
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// fmt.Println("Inserted a single document: ", insertResult.InsertedID)
+
 	// Init router
 	r := mux.NewRouter()
 
